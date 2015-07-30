@@ -207,3 +207,4 @@ if __name__ == '__main__':
 
 
 #Mean gini score: 0.366737 with encoded categorical columns - all, average harzad for all categorical columns, count, avg t2_v1, avg_t2_v2 by cat cols(all) ,params from Kaggle scripts
+#0.386180 lb

@@ -13,6 +13,7 @@ from sklearn.cross_validation import KFold, train_test_split
 from pandasql import sqldf
 
 
+
 def load_data():
     print ("Loading data ......")
     start = time.time()
@@ -90,6 +91,7 @@ def load_data():
 
 
 
+
 def gini(solution, submission):
     df = zip(solution, submission, range(len(solution)))
     df = sorted(df, key=lambda x: (x[1],-x[2]), reverse=True)
@@ -111,8 +113,8 @@ def xgboost_pred(train,labels,test, params):
 
     plst = list(params.items())
 
-    # offset = 3000
-    offset = int(train.shape[0]*0.25)
+    offset = 3000
+    #offset = int(train.shape[0]*0.25)
     num_rounds = 10000
     xgtest = xgb.DMatrix(test)
 
@@ -167,43 +169,11 @@ if __name__ == '__main__':
 
 
     trainX, trainY, testX, testId = load_data()
-    #Using 10000 samples
-    # idx = np.random.choice(trainX.shape[0],10000)
-    trainX=trainX[30000:40000]
-    trainY=trainY[30000:40000]
+    predY = xgboost_pred(trainX,trainY,testX, params)
 
-    kf = KFold(trainX.shape[0], n_folds=4,shuffle=True, random_state  = 42 )
-    gini_scores = []
-    for train_index, test_index in kf:
-        #Splict train set into k folds
-        X_train_fold, X_test_fold = trainX[train_index], trainX[test_index]
-        y_train_fold, y_test_fold = trainY[train_index], trainY[test_index]    
+    #generate solution
+    preds = pd.DataFrame({"Id": testId.reshape(testId.shape[0]), "Hazard": predY})
+    preds = preds.set_index('Id')
+    preds.to_csv('xgboost_avg_hazard_cnt_t2v1v2.csv')
 
-        y_pred_fold = xgboost_pred(X_train_fold,y_train_fold,X_test_fold, params)
-
-        gini_score = normalized_gini(y_test_fold,y_pred_fold)
-        print gini_score
-        gini_scores.append(gini_score)
-   
-    print ("Mean gini score: %f" % (np.mean(gini_scores)))
-    print ("Finished in %0.3fs" % (time.time() - start))    
-
-
-#Mean gini score: 0.355645 with original tuned aggr
-
-
-#Mean gini score: 0.358885 with encoded categorical columns - all
-
-#Mean gini score: 0.361525 with encoded categorical columns - all, average harzad for all categorical columns
-# 0.385563 cv 0.384648 lb
-
-#Mean gini score: 0.365254 with encoded categorical columns - all, average harzad for all categorical columns, params from Kaggle scripts
-#0.387473 lb
-#0.379417 lb with max_depth=15
-
-#Mean gini score: 0.365254 with encoded categorical columns - all, average harzad for all categorical columns, params from Kaggle scripts
-
-#Mean gini score: 0.365360 with encoded categorical columns - all, average harzad for all categorical columns, count by cat cols(all) ,params from Kaggle scripts
-
-
-#Mean gini score: 0.366737 with encoded categorical columns - all, average harzad for all categorical columns, count, avg t2_v1, avg_t2_v2 by cat cols(all) ,params from Kaggle scripts
+#cv 0.385563    

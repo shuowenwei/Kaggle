@@ -167,7 +167,7 @@ def normalized_gini(solution, submission):
     return normalized_gini  
 
 
-def xgboost_pred(train,labels,test, params):
+def xgboost_pred(train,labels,test,test_labels, params):
 
     plst = list(params.items())
 
@@ -189,6 +189,8 @@ def xgboost_pred(train,labels,test, params):
     model = xgb.train(plst, xtrain, model.best_iteration)
     preds1 = model.predict(xgtest)
 
+    print ("score1: %f" % (normalized_gini(test_labels,preds1)))
+
 
     #reverse train and labels and use different 5k for early stopping. 
     # this adds very little to the score but it is an option if you are concerned about using all the data. 
@@ -205,10 +207,12 @@ def xgboost_pred(train,labels,test, params):
     print "Best iteration:", model.best_iteration
     model = xgb.train(plst, xtrain, model.best_iteration)
     preds2 = model.predict(xgtest)
+    print ("score2: %f" % (normalized_gini(test_labels,preds2)))
     
+
     #combine predictions
     #since the metric only cares about relative rank we don't need to average
-    preds = preds1 + preds2*5
+    preds = preds1*2.5 + preds2*7.5
     return preds,preds1,preds2
 
 if __name__ == '__main__':
@@ -233,11 +237,54 @@ if __name__ == '__main__':
     params["silent"] = 1
     params["max_depth"] = 8    
 
-    preds,preds1,preds2 = xgboost_pred(trainX,trainY,testX, params)
-    preds = pd.DataFrame({"Id": testId.reshape(testId.shape[0]), "Hazard": preds})
-    preds = preds.set_index('Id')
-    preds.to_csv('xgb_aggr_exp_mean_hazard_count.csv')
-    print ("Finished in %0.3fs" % (time.time() - start))
+    skf = StratifiedKFold(trainY, n_folds=4, random_state  = 42)
+    # kf = KFold(trainX.shape[0], n_folds=4,shuffle=True, random_state  = 42 )
+    gini_scores = []
+    for train_index, test_index in skf:
+        #Splict train set into k folds
+        X_train_fold, X_test_fold = trainX[train_index], trainX[test_index]
+        y_train_fold, y_test_fold = trainY[train_index], trainY[test_index]    
+        y_pred_fold,y_pred_fold1,y_pred_fold2 = xgboost_pred(X_train_fold,y_train_fold,X_test_fold,y_test_fold, params)
+        gini_scores.append([normalized_gini(y_test_fold,y_pred_fold1)
+                            , normalized_gini(y_test_fold,y_pred_fold2)
+                            , normalized_gini(y_test_fold,y_pred_fold)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')+rankdata(y_pred_fold2,method='dense'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')*1.5+rankdata(y_pred_fold2,method='dense'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')*2+rankdata(y_pred_fold2,method='dense'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')*3+rankdata(y_pred_fold2,method='dense'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')*4+rankdata(y_pred_fold2,method='dense'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')*5+rankdata(y_pred_fold2,method='dense'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')+rankdata(y_pred_fold2,method='dense')*1.5)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')+rankdata(y_pred_fold2,method='dense')*2)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')+rankdata(y_pred_fold2,method='dense')*2)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')+rankdata(y_pred_fold2,method='dense')*2)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='dense')+rankdata(y_pred_fold2,method='dense')*2)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')+rankdata(y_pred_fold2,method='average'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')*1.5+rankdata(y_pred_fold2,method='average'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')*2+rankdata(y_pred_fold2,method='average'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')*3+rankdata(y_pred_fold2,method='average'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')*4+rankdata(y_pred_fold2,method='average'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')*5+rankdata(y_pred_fold2,method='average'))
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')+rankdata(y_pred_fold2,method='average')*1.5)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')+rankdata(y_pred_fold2,method='average')*2)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')+rankdata(y_pred_fold2,method='average')*2)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')+rankdata(y_pred_fold2,method='average')*2)
+                            , normalized_gini(y_test_fold,rankdata(y_pred_fold1,method='average')+rankdata(y_pred_fold2,method='average')*2)                            
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*2 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*3 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*4 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*5 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*5.5 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*6 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*7 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*8 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*9 )
+                            , normalized_gini(y_test_fold,y_pred_fold1 +y_pred_fold2*10 )])
+    
+    gini_scores=np.array(gini_scores)   
+    for i in gini_scores.T:
+        print np.mean(i)
+    print ("Finished in %0.3fs" % (time.time() - start))    
 
 # val 1: 
     # catCols = ['T1_V4', 'T1_V5', 'T1_V6', 'T1_V7', 'T1_V8', 'T1_V9', 'T1_V11', 'T1_V12', 'T1_V15', 'T1_V16', 'T1_V17', 'T2_V3', 'T2_V5','T2_V11', 'T2_V12', 'T2_V13']
